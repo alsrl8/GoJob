@@ -11,5 +11,6 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mattn/go-sqlite3 v1.14.23 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 )

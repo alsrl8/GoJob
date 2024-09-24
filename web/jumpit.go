@@ -1,7 +1,8 @@
 package web
 
 import (
-	"GoJob/post"
+	"GoJob/db"
+	"GoJob/info"
 	"GoJob/xlog"
 	"context"
 	"errors"
@@ -38,19 +39,37 @@ func CrawlJumpit() {
 		return
 	}
 
-	posts, err := readPosts(ctx)
+	posts, err := readJumpitPosts(ctx)
 	if err != nil {
 		xlog.Logger.Error(err)
 		return
 	}
 
-	fmt.Printf("%+v\n", (*posts)[0])
-	// TODO Jumpit post를 DB에 저장하기. 이미지와 링크, 세부 정보까지 다루기
+	storeJumpitPosts(posts)
 }
 
-func readPosts(ctx context.Context) (*[]post.JumpitPost, error) {
+func storeJumpitPosts(posts *[]*info.JumpitPost) {
+	sqlite := db.NewSqlite()
+
+	for _, post := range *posts {
+		data := map[string]interface{}{
+			"name":        post.Name,
+			"description": post.Description,
+			"company":     post.Company,
+			"skills":      strings.Join(post.Skills, ","),
+			"link":        "https://www.jumpit.co.kr/search?sort=relation&keyword=golang",
+		}
+		err := sqlite.InsertData("jumpit", data)
+		if err != nil {
+			xlog.Logger.Error(err)
+			continue
+		}
+	}
+}
+
+func readJumpitPosts(ctx context.Context) (*[]*info.JumpitPost, error) {
 	var postNodes []*cdp.Node
-	var posts []post.JumpitPost
+	var posts []*info.JumpitPost
 
 	err := chromedp.Run(ctx,
 		chromedp.Nodes(
@@ -65,11 +84,19 @@ func readPosts(ctx context.Context) (*[]post.JumpitPost, error) {
 	}
 
 	for _, _post := range postNodes {
+		var companyName string
 		var postName string
 		var skillStack string
 		var description string
 
 		err = chromedp.Run(ctx,
+			chromedp.Text(
+				`div.sc-15ba67b8-0.kkQQfR > div > div`,
+				&companyName,
+				chromedp.FromNode(_post),
+				chromedp.NodeVisible,
+				chromedp.ByQuery,
+			),
 			chromedp.Text(
 				`:scope .position_card_info_title`,
 				&postName,
@@ -94,11 +121,11 @@ func readPosts(ctx context.Context) (*[]post.JumpitPost, error) {
 		)
 		if err != nil {
 			xlog.Logger.Error(err)
-			fmt.Printf("Post %d: Failed to retrieve _post details.\n")
 			continue
 		}
 
-		posts = append(posts, post.JumpitPost{
+		posts = append(posts, &info.JumpitPost{
+			Company:     companyName,
 			Name:        postName,
 			Skills:      strings.Split(skillStack, "\n· "),
 			Description: description,
