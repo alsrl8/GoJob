@@ -14,15 +14,22 @@ import (
 	"time"
 )
 
-func CrawlJumpit() {
+func CrawlJumpit(stopLoading chan bool) {
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 
 	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	err := navigateToJumpit(ctx)
+	err := clearJumpitPostData()
 	if err != nil {
+		xlog.Logger.Error(err)
+		return
+	}
+
+	err = navigateToJumpit(ctx)
+	if err != nil {
+		xlog.Logger.Error(err)
 		return
 	}
 
@@ -48,6 +55,12 @@ func CrawlJumpit() {
 	storeJumpitPosts(posts)
 }
 
+func clearJumpitPostData() error {
+	sqlite := db.NewSqlite()
+	err := sqlite.DeleteData("jumpit", "")
+	return err
+}
+
 func storeJumpitPosts(posts *[]*info.JumpitPost) {
 	sqlite := db.NewSqlite()
 
@@ -57,7 +70,7 @@ func storeJumpitPosts(posts *[]*info.JumpitPost) {
 			"description": post.Description,
 			"company":     post.Company,
 			"skills":      strings.Join(post.Skills, ","),
-			"link":        "https://www.jumpit.co.kr/search?sort=relation&keyword=golang",
+			"link":        post.Link,
 		}
 		err := sqlite.InsertData("jumpit", data)
 		if err != nil {
@@ -88,6 +101,7 @@ func readJumpitPosts(ctx context.Context) (*[]*info.JumpitPost, error) {
 		var postName string
 		var skillStack string
 		var description string
+		var link string
 
 		err = chromedp.Run(ctx,
 			chromedp.Text(
@@ -118,6 +132,15 @@ func readJumpitPosts(ctx context.Context) (*[]*info.JumpitPost, error) {
 				chromedp.NodeVisible,
 				chromedp.ByQuery,
 			),
+			chromedp.AttributeValue(
+				`:scope a`,
+				"href",
+				&link,
+				nil,
+				chromedp.FromNode(_post),
+				chromedp.NodeVisible,
+				chromedp.ByQuery,
+			),
 		)
 		if err != nil {
 			xlog.Logger.Error(err)
@@ -129,6 +152,7 @@ func readJumpitPosts(ctx context.Context) (*[]*info.JumpitPost, error) {
 			Name:        postName,
 			Skills:      strings.Split(skillStack, "\n· "),
 			Description: description,
+			Link:        link,
 		})
 	}
 

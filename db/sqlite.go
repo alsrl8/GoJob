@@ -91,6 +91,15 @@ func (s *Sqlite) InsertData(tableName string, data map[string]interface{}) error
 	return nil
 }
 
+func (s *Sqlite) DeleteData(tableName string, where string, args ...interface{}) error {
+	_, err := s.Exec(fmt.Sprintf("DELETE FROM %s %s", tableName, where), args...)
+	if err != nil {
+		xlog.Logger.Error(err)
+		return errors.New(fmt.Sprintf("failed to delete data from sqlite table: %s", tableName))
+	}
+	return nil
+}
+
 func (s *Sqlite) SelectData(tableName string, where string, args ...interface{}) ([]map[string]interface{}, error) {
 	query := fmt.Sprintf(
 		"SELECT * FROM %s %s",

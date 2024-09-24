@@ -5,4 +5,5 @@ type JumpitPost struct {
 	Name        string   `json:"name"`
 	Skills      []string `json:"skills"`
 	Description string   `json:"description"`
+	Link        string   `json:"link"`
 }

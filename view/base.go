@@ -10,15 +10,18 @@ import (
 	"time"
 )
 
-func setList(list *tview.List, stopLoading chan bool) {
+func setList(app *tview.Application, list *tview.List, stopLoading chan bool) {
 	go func() {
-		time.Sleep(time.Second * 3)
+		defer func() {
+			stopLoading <- true
+		}()
+
+		time.Sleep(time.Second * 2)
 
 		sqlite := db.NewSqlite()
 		data, err := sqlite.SelectData("jumpit", "")
 		if err != nil {
 			xlog.Logger.Error(err)
-			stopLoading <- true
 			return
 		}
 
@@ -28,7 +31,7 @@ func setList(list *tview.List, stopLoading chan bool) {
 			list.AddItem(name, description, 0, nil)
 		}
 
-		stopLoading <- true
+		app.SetFocus(list)
 	}()
 }
 
@@ -42,7 +45,8 @@ func setLoading(app *tview.Application, list *tview.List, index int, stopLoading
 				case <-stopLoading:
 					loading = false
 					main, _ := list.GetItemText(index)
-					list.SetItemText(index, main, "")
+					lastExecTime := time.Now().Format("2006-01-02 15:04:05")
+					list.SetItemText(index, main, lastExecTime+" (Complete)")
 					app.Draw()
 					return
 				default:
@@ -65,29 +69,39 @@ func Init() {
 		AddItem("Crawl Data", "`Jumpit`에서 golang 공고를 새로 읽어옵니다.", 'c', nil).
 		AddItem("Read Data", "읽어온 `Jumpit` 공고를 새로 읽어옵니다.", 'r', nil)
 	jumpitList := tview.NewList()
+	jumpitDetail := tview.NewTextView()
+	bodyLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(jumpitList, 0, 1, false).
+		AddItem(jumpitDetail, 0, 1, false)
 	layout := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
 		AddItem(menuList, 6, 0, true).
-		AddItem(jumpitList, 0, 1, false)
+		AddItem(bodyLayout, 0, 1, false)
 
 	// Select event
 	menuList.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		switch index {
 		case 0:
-			web.CrawlJumpit()
+			stopLoading := make(chan bool)
+			setLoading(app, menuList, 0, stopLoading)
+			go func() {
+				web.CrawlJumpit(stopLoading)
+				stopLoading <- true
+			}()
 			break
 		case 1:
+			jumpitList.Clear()
 			stopLoading := make(chan bool)
 			setLoading(app, menuList, 1, stopLoading)
-			setList(jumpitList, stopLoading)
+			setList(app, jumpitList, stopLoading)
 			break
 		}
 	})
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
-		case 'c':
+		case 'c', 'r':
 			app.SetFocus(menuList)
 		case 'z':
 			app.SetFocus(jumpitList)
