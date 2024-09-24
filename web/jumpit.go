@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func CrawlJumpit(stopLoading chan bool) {
+func CrawlJumpit() {
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 

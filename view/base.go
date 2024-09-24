@@ -10,29 +10,19 @@ import (
 	"time"
 )
 
-func setList(app *tview.Application, list *tview.List, stopLoading chan bool) {
-	go func() {
-		defer func() {
-			stopLoading <- true
-		}()
+func setList(list *tview.List) {
+	sqlite := db.NewSqlite()
+	data, err := sqlite.SelectData("jumpit", "")
+	if err != nil {
+		xlog.Logger.Error(err)
+		return
+	}
 
-		time.Sleep(time.Second * 2)
-
-		sqlite := db.NewSqlite()
-		data, err := sqlite.SelectData("jumpit", "")
-		if err != nil {
-			xlog.Logger.Error(err)
-			return
-		}
-
-		for _, v := range data {
-			name := v["name"].(string)
-			description := v["description"].(string)
-			list.AddItem(name, description, 0, nil)
-		}
-
-		app.SetFocus(list)
-	}()
+	for _, v := range data {
+		name := v["name"].(string)
+		description := v["description"].(string)
+		list.AddItem(name, description, 0, nil)
+	}
 }
 
 func setLoading(app *tview.Application, list *tview.List, index int, stopLoading chan bool) {
@@ -67,7 +57,7 @@ func Init() {
 	header := tview.NewTextView().SetText("[#00B7EB]GO JOB[-]").SetTextAlign(tview.AlignCenter).SetDynamicColors(true)
 	menuList := tview.NewList().
 		AddItem("Crawl Data", "`Jumpit`에서 golang 공고를 새로 읽어옵니다.", 'c', nil).
-		AddItem("Read Data", "읽어온 `Jumpit` 공고를 새로 읽어옵니다.", 'r', nil)
+		AddItem("Read Data", "읽어온 `Jumpit` 공고를 새로 불러옵니다.", 'r', nil)
 	jumpitList := tview.NewList()
 	jumpitDetail := tview.NewTextView()
 	bodyLayout := tview.NewFlex().SetDirection(tview.FlexColumn).
@@ -86,7 +76,7 @@ func Init() {
 			stopLoading := make(chan bool)
 			setLoading(app, menuList, 0, stopLoading)
 			go func() {
-				web.CrawlJumpit(stopLoading)
+				web.CrawlJumpit()
 				stopLoading <- true
 			}()
 			break
@@ -94,7 +84,12 @@ func Init() {
 			jumpitList.Clear()
 			stopLoading := make(chan bool)
 			setLoading(app, menuList, 1, stopLoading)
-			setList(app, jumpitList, stopLoading)
+			go func() {
+				time.Sleep(time.Second * 2)
+				setList(jumpitList)
+				stopLoading <- true
+				app.SetFocus(jumpitList)
+			}()
 			break
 		}
 	})
