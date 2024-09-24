@@ -1,7 +1,7 @@
 package main
 
 import (
-	"GoJob/web"
+	"GoJob/view"
 	"GoJob/xlog"
 )
 
@@ -14,5 +14,5 @@ func main() {
 
 	xlog.Logger.Info("GoJob Started")
 
-	web.CrawlJumpit()
+	view.Init()
 }

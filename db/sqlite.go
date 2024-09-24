@@ -91,6 +91,56 @@ func (s *Sqlite) InsertData(tableName string, data map[string]interface{}) error
 	return nil
 }
 
+func (s *Sqlite) SelectData(tableName string, where string, args ...interface{}) ([]map[string]interface{}, error) {
+	query := fmt.Sprintf(
+		"SELECT * FROM %s %s",
+		tableName,
+		where,
+	)
+
+	data, err := s.Query(query, args...)
+	if err != nil {
+		xlog.Logger.Error(err)
+		return []map[string]interface{}{}, err
+	}
+	defer func(data *sql.Rows) {
+		err = data.Close()
+		if err != nil {
+			xlog.Logger.Error(err)
+			return
+		}
+	}(data)
+
+	var results []map[string]interface{}
+	columns, err := data.Columns()
+	if err != nil {
+		xlog.Logger.Error(err)
+		return nil, err
+	}
+
+	for data.Next() {
+		row := make(map[string]interface{})
+		columnPointers := make([]interface{}, len(columns))
+		for i := range columns {
+			columnPointers[i] = new(interface{})
+		}
+		err := data.Scan(columnPointers...)
+		if err != nil {
+			xlog.Logger.Error(err)
+			return nil, err
+		}
+		for i, colName := range columns {
+			row[colName] = *(columnPointers[i].(*interface{}))
+		}
+		results = append(results, row)
+	}
+	if err = data.Err(); err != nil {
+		xlog.Logger.Error(err)
+		return nil, err
+	}
+	return results, nil
+}
+
 func TestSqlite() {
 	db, err := sql.Open("sqlite3", "./gojob.db")
 	if err != nil {
