@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
+	"github.com/rivo/tview"
 	"strconv"
 	"strings"
 	"time"
@@ -53,6 +54,77 @@ func CrawlJumpit() {
 	}
 
 	storeJumpitPosts(posts)
+}
+
+func CrawlJumpitPostDetail(index int, detailView *tview.TextView, stopLoading chan bool) {
+	sqlite := db.NewSqlite()
+	data, err := sqlite.SelectData("jumpit", "")
+	if err != nil {
+		stopLoading <- true
+		xlog.Logger.Error(err)
+		return
+	}
+	link, ok := data[index]["link"].(string)
+	if !ok {
+		stopLoading <- true
+		xlog.Logger.Error("failed to get url")
+		return
+	}
+
+	url := fmt.Sprintf("https://www.jumpit.co.kr%s", link)
+
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
+
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	err = navigateToJumpitDetail(ctx, url)
+	if err != nil {
+		stopLoading <- true
+		xlog.Logger.Error(err)
+		return
+	}
+
+	text, err := readJumpitDetail(ctx)
+	if err != nil {
+		stopLoading <- true
+		xlog.Logger.Error(err)
+		return
+	}
+
+	stopLoading <- true
+	detailView.SetText(text)
+}
+
+func readJumpitDetail(ctx context.Context) (string, error) {
+	var headerNodes []*cdp.Node
+	err := chromedp.Run(ctx,
+		chromedp.Nodes(
+			`sc-f491c6ef-0 egBfVn`,
+			&headerNodes,
+			chromedp.NodeVisible,
+		),
+	)
+	if err != nil {
+		xlog.Logger.Error(err)
+		return "", errors.New("failed to read headerNodes")
+	}
+
+	var congratulatoryMoney string
+	err = chromedp.Run(ctx,
+		chromedp.Text(`div.sc-f491c6ef-1.bManvq > span`,
+			&congratulatoryMoney,
+			chromedp.NodeVisible,
+			chromedp.ByQuery,
+		),
+	)
+	if err != nil {
+		xlog.Logger.Error(err)
+		return "", errors.New("failed to read congratulatoryMoney")
+	}
+
+	return congratulatoryMoney, nil
 }
 
 func clearJumpitPostData() error {
@@ -219,6 +291,16 @@ func navigateToJumpit(ctx context.Context) error {
 	if err != nil {
 		xlog.Logger.Error(err)
 		return errors.New("failed to navigate to jumpit")
+	}
+
+	return nil
+}
+
+func navigateToJumpitDetail(ctx context.Context, url string) error {
+	err := chromedp.Run(ctx, chromedp.Navigate(url))
+	if err != nil {
+		xlog.Logger.Error(err)
+		return errors.New("failed to navigate to jumpit detail")
 	}
 
 	return nil

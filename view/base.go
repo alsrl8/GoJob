@@ -18,14 +18,14 @@ func setList(list *tview.List) {
 		return
 	}
 
-	for _, v := range data {
+	for i, v := range data {
 		name := v["name"].(string)
 		description := v["description"].(string)
-		list.AddItem(name, description, 0, nil)
+		list.AddItem(fmt.Sprintf("[#00B7EB]%d.[-] %s", i+1, name), description, 0, nil)
 	}
 }
 
-func setLoading(app *tview.Application, list *tview.List, index int, stopLoading chan bool) {
+func setLoadingForListView(app *tview.Application, list *tview.List, index int, stopLoading chan bool) {
 	go func() {
 		loadingSymbols := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 		loading := true
@@ -42,6 +42,26 @@ func setLoading(app *tview.Application, list *tview.List, index int, stopLoading
 				default:
 					main, _ := list.GetItemText(index)
 					list.SetItemText(index, main, fmt.Sprintf("Loading %s", symbol))
+					app.Draw()
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+		}
+	}()
+}
+
+func setLoadingForTextView(app *tview.Application, detail *tview.TextView, stopLoading chan bool) {
+	go func() {
+		loadingSymbols := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		loading := true
+		for loading {
+			for _, symbol := range loadingSymbols {
+				select {
+				case <-stopLoading:
+					loading = false
+					return
+				default:
+					detail.SetText(fmt.Sprintf("Loading %s", symbol))
 					app.Draw()
 					time.Sleep(100 * time.Millisecond)
 				}
@@ -74,7 +94,7 @@ func Init() {
 		switch index {
 		case 0:
 			stopLoading := make(chan bool)
-			setLoading(app, menuList, 0, stopLoading)
+			setLoadingForListView(app, menuList, 0, stopLoading)
 			go func() {
 				web.CrawlJumpit()
 				stopLoading <- true
@@ -83,7 +103,7 @@ func Init() {
 		case 1:
 			jumpitList.Clear()
 			stopLoading := make(chan bool)
-			setLoading(app, menuList, 1, stopLoading)
+			setLoadingForListView(app, menuList, 1, stopLoading)
 			go func() {
 				time.Sleep(time.Second * 2)
 				setList(jumpitList)
@@ -92,6 +112,14 @@ func Init() {
 			}()
 			break
 		}
+	})
+	jumpitList.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+		stopLoading := make(chan bool)
+		setLoadingForTextView(app, jumpitDetail, stopLoading)
+		go func() {
+			web.CrawlJumpitPostDetail(index, jumpitDetail, stopLoading)
+			app.Draw()
+		}()
 	})
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
