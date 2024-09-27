@@ -74,7 +74,7 @@ func CrawlJumpitPostDetail(index int) (dtl *info.JumpitDetail) {
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 
-	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	err = navigateToJumpitDetail(ctx, url)
@@ -136,7 +136,7 @@ func readJumpitDetail(ctx context.Context) (dtl *info.JumpitDetail, err error) {
 
 	var congratulations string
 	err = chromedp.Run(ctx,
-		chromedp.Text(`//main/div/div/section/div/div/span`, &congratulations, chromedp.NodeVisible),
+		chromedp.Text(`//main/div/div[1]/section/div/div[1]/span`, &congratulations, chromedp.NodeVisible),
 	)
 	if err != nil {
 		xlog.Logger.Error(err)
