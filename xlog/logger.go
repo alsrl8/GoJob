@@ -1,6 +1,7 @@
 package xlog
 
 import (
+	"GoJob/config"
 	"fmt"
 	"os"
 	"runtime"
@@ -22,8 +23,21 @@ type XLogger struct {
 var Logger *XLogger
 var once sync.Once
 
-func NewXLogger(logPath string) *XLogger {
+func getLogPath() string {
+	runEnv := config.GetRunEnv()
+	switch runEnv {
+	case config.Local:
+		return "./app.log"
+	case config.Test:
+		return "../test.log"
+	default:
+		return ""
+	}
+}
+
+func NewXLogger() *XLogger {
 	once.Do(func() {
+		logPath := getLogPath()
 		logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
 			fmt.Printf("failed to open log file: %v", err)

@@ -7,3 +7,8 @@ type JumpitPost struct {
 	Description string   `json:"description"`
 	Link        string   `json:"link"`
 }
+
+type JumpitDetail struct {
+	Tags            string `json:"tags"`
+	Congratulations string `json:"congratulations"`
+}

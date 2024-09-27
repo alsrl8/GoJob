@@ -20,8 +20,8 @@ func setList(list *tview.List) {
 
 	for i, v := range data {
 		name := v["name"].(string)
-		description := v["description"].(string)
-		list.AddItem(fmt.Sprintf("[#00B7EB]%d.[-] %s", i+1, name), description, 0, nil)
+		company := v["company"].(string)
+		list.AddItem(fmt.Sprintf("[#00B7EB]%d.[-] %s", i+1, name), company, 0, nil)
 	}
 }
 
@@ -117,7 +117,14 @@ func Init() {
 		stopLoading := make(chan bool)
 		setLoadingForTextView(app, jumpitDetail, stopLoading)
 		go func() {
-			web.CrawlJumpitPostDetail(index, jumpitDetail, stopLoading)
+			dtl := web.CrawlJumpitPostDetail(index)
+			stopLoading <- true
+
+			congratulationsStr := fmt.Sprintf("[#32CD32]%s[-]\n", dtl.Congratulations)
+			tagStr := fmt.Sprintf("[#00B7EB]%s[-]\n%s", "Tags", dtl.Tags)
+			dtlStr := fmt.Sprintf("%s\n%s", congratulationsStr, tagStr)
+			jumpitDetail.SetText(dtlStr)
+			jumpitDetail.SetDynamicColors(true)
 			app.Draw()
 		}()
 	})

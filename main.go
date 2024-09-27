@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	logger := xlog.NewXLogger("./app.log")
+	logger := xlog.NewXLogger()
 	defer func() {
 		logger.Info("GoJob Stopped")
 		logger.Close()

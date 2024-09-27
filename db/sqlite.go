@@ -1,6 +1,7 @@
 package db
 
 import (
+	"GoJob/config"
 	"GoJob/xlog"
 	"database/sql"
 	"errors"
@@ -17,10 +18,23 @@ type Sqlite struct {
 var sqlite *Sqlite
 var onceSqlite sync.Once
 
+func getDBSourcePath() string {
+	runEnv := config.GetRunEnv()
+	switch runEnv {
+	case config.Local:
+		return "./gojob.db"
+	case config.Test:
+		return "../gojob.db"
+	default:
+		return ""
+	}
+}
+
 func NewSqlite() *Sqlite {
 	onceSqlite.Do(func() {
+		dbSourcePath := getDBSourcePath()
 		sqlite = &Sqlite{}
-		err := sqlite.connect()
+		err := sqlite.connect(dbSourcePath)
 		if err != nil {
 			xlog.Logger.Error(err)
 			return
@@ -29,8 +43,8 @@ func NewSqlite() *Sqlite {
 	return sqlite
 }
 
-func (s *Sqlite) connect() error {
-	db, err := sql.Open("sqlite3", "./gojob.db")
+func (s *Sqlite) connect(dbSourcePath string) error {
+	db, err := sql.Open("sqlite3", dbSourcePath)
 	if err != nil {
 		xlog.Logger.Error(err)
 		return errors.New("failed to connect database")
@@ -47,7 +61,7 @@ func (s *Sqlite) connect() error {
 }
 
 func (s *Sqlite) initTable() error {
-	_, err := s.DB.Exec("CREATE TABLE IF NOT EXISTS jumpit (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, company TEXT,  skills TEXT, link TEXT)")
+	_, err := s.DB.Exec("CREATE TABLE IF NOT EXISTS jumpit (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, company TEXT,  skills TEXT, link TEXT, tags TEXT)")
 	if err != nil {
 		xlog.Logger.Error(err)
 		return errors.New(fmt.Sprintf("failed to initialize sqlite table: %s", "jumpit"))
@@ -133,7 +147,7 @@ func (s *Sqlite) SelectData(tableName string, where string, args ...interface{})
 		for i := range columns {
 			columnPointers[i] = new(interface{})
 		}
-		err := data.Scan(columnPointers...)
+		err = data.Scan(columnPointers...)
 		if err != nil {
 			xlog.Logger.Error(err)
 			return nil, err

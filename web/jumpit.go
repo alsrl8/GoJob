@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
-	"github.com/rivo/tview"
 	"strconv"
 	"strings"
 	"time"
@@ -56,17 +55,16 @@ func CrawlJumpit() {
 	storeJumpitPosts(posts)
 }
 
-func CrawlJumpitPostDetail(index int, detailView *tview.TextView, stopLoading chan bool) {
+func CrawlJumpitPostDetail(index int) (dtl *info.JumpitDetail) {
 	sqlite := db.NewSqlite()
 	data, err := sqlite.SelectData("jumpit", "")
 	if err != nil {
-		stopLoading <- true
 		xlog.Logger.Error(err)
 		return
 	}
+
 	link, ok := data[index]["link"].(string)
 	if !ok {
-		stopLoading <- true
 		xlog.Logger.Error("failed to get url")
 		return
 	}
@@ -81,50 +79,75 @@ func CrawlJumpitPostDetail(index int, detailView *tview.TextView, stopLoading ch
 
 	err = navigateToJumpitDetail(ctx, url)
 	if err != nil {
-		stopLoading <- true
 		xlog.Logger.Error(err)
 		return
 	}
 
-	text, err := readJumpitDetail(ctx)
+	dtl, err = readJumpitDetail(ctx)
 	if err != nil {
-		stopLoading <- true
 		xlog.Logger.Error(err)
 		return
 	}
 
-	stopLoading <- true
-	detailView.SetText(text)
+	return
 }
 
-func readJumpitDetail(ctx context.Context) (string, error) {
-	var headerNodes []*cdp.Node
-	err := chromedp.Run(ctx,
-		chromedp.Nodes(
-			`sc-f491c6ef-0 egBfVn`,
-			&headerNodes,
-			chromedp.NodeVisible,
-		),
-	)
-	if err != nil {
-		xlog.Logger.Error(err)
-		return "", errors.New("failed to read headerNodes")
-	}
-
-	var congratulatoryMoney string
+func readJumpitDetail(ctx context.Context) (dtl *info.JumpitDetail, err error) {
+	var tagContainer []*cdp.Node
 	err = chromedp.Run(ctx,
-		chromedp.Text(`div.sc-f491c6ef-1.bManvq > span`,
-			&congratulatoryMoney,
+		chromedp.Nodes(
+			`//main/div/div/section/div/ul`,
+			&tagContainer,
 			chromedp.NodeVisible,
-			chromedp.ByQuery,
+		),
+	)
+
+	tagContainerNode := tagContainer[0]
+
+	var tagNodes []*cdp.Node
+	err = chromedp.Run(ctx,
+		chromedp.Nodes(
+			tagContainerNode.FullXPathByID()+`/li`,
+			&tagNodes,
+			chromedp.NodeVisible,
 		),
 	)
 	if err != nil {
 		xlog.Logger.Error(err)
-		return "", errors.New("failed to read congratulatoryMoney")
+		return
 	}
 
-	return congratulatoryMoney, nil
+	var tags []string
+	for _, tag := range tagNodes {
+		var tagStr string
+		err = chromedp.Run(ctx,
+			chromedp.Text(
+				tag.FullXPathByID(),
+				&tagStr,
+				chromedp.NodeVisible,
+			),
+		)
+		if err != nil {
+			xlog.Logger.Error(err)
+			return
+		}
+		tags = append(tags, tagStr)
+	}
+
+	var congratulations string
+	err = chromedp.Run(ctx,
+		chromedp.Text(`//main/div/div/section/div/div/span`, &congratulations, chromedp.NodeVisible),
+	)
+	if err != nil {
+		xlog.Logger.Error(err)
+		return
+	}
+
+	dtl = &info.JumpitDetail{}
+	dtl.Congratulations = congratulations
+	dtl.Tags = strings.Join(tags, "\n")
+
+	return
 }
 
 func clearJumpitPostData() error {
@@ -158,7 +181,7 @@ func readJumpitPosts(ctx context.Context) (*[]*info.JumpitPost, error) {
 
 	err := chromedp.Run(ctx,
 		chromedp.Nodes(
-			`.sc-d609d44f-0.grDLmW`,
+			`//main/div/section[2]/section/div`,
 			&postNodes,
 			chromedp.NodeVisible,
 		),
@@ -177,41 +200,33 @@ func readJumpitPosts(ctx context.Context) (*[]*info.JumpitPost, error) {
 
 		err = chromedp.Run(ctx,
 			chromedp.Text(
-				`div.sc-15ba67b8-0.kkQQfR > div > div`,
+				_post.FullXPathByID()+`/a/div[3]/div`,
 				&companyName,
-				chromedp.FromNode(_post),
 				chromedp.NodeVisible,
-				chromedp.ByQuery,
 			),
 			chromedp.Text(
-				`:scope .position_card_info_title`,
+				_post.FullXPathByID()+`/a/div[3]/h2`,
 				&postName,
-				chromedp.FromNode(_post),
 				chromedp.NodeVisible,
-				chromedp.ByQuery,
 			),
 			chromedp.Text(
-				`:scope .sc-15ba67b8-1.iFMgIl`,
+				_post.FullXPathByID()+`/a/div[3]/ul[1]`,
 				&skillStack,
 				chromedp.FromNode(_post),
 				chromedp.NodeVisible,
-				chromedp.ByQuery,
 			),
 			chromedp.Text(
-				`:scope .sc-15ba67b8-1.cdeuol`,
+				_post.FullXPathByID()+`/a/div[3]/ul[2]`,
 				&description,
 				chromedp.FromNode(_post),
 				chromedp.NodeVisible,
-				chromedp.ByQuery,
 			),
 			chromedp.AttributeValue(
-				`:scope a`,
+				_post.FullXPathByID()+`/a`,
 				"href",
 				&link,
 				nil,
-				chromedp.FromNode(_post),
 				chromedp.NodeVisible,
-				chromedp.ByQuery,
 			),
 		)
 		if err != nil {
@@ -240,8 +255,7 @@ func scrollPostList(ctx context.Context, postNum int) error {
 			for loadedPostNum < postNum {
 				err := chromedp.Run(ctx,
 					chromedp.Evaluate(`window.scrollTo(0, document.documentElement.scrollHeight)`, nil),
-					chromedp.Sleep(2*time.Second),
-					chromedp.Nodes(`.sc-d609d44f-0.grDLmW`, &loadedPosts, chromedp.NodeVisible),
+					chromedp.Nodes(`//main/div/section[2]/section/div`, &loadedPosts, chromedp.NodeVisible),
 				)
 				if err != nil {
 					xlog.Logger.Error(err)
@@ -266,7 +280,7 @@ func getJumpitPostNum(ctx context.Context) (int, error) {
 	var postNumStr string
 	err := chromedp.Run(ctx,
 		chromedp.Sleep(1*time.Second),
-		chromedp.Text(".sc-c12e57e5-2.fFIvdj", &postNumStr, chromedp.ByQuery),
+		chromedp.Text("//main/div/section[2]/div/div", &postNumStr, chromedp.NodeVisible),
 	)
 
 	if err != nil {
